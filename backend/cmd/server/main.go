@@ -25,4 +25,5 @@ func main() {
 	log.Println("🚀 CloudX Started")
 
 	r.Run(":" + configs.AppConfig.Port)
+
 }

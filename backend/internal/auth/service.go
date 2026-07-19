@@ -8,11 +8,13 @@ import (
 
 type Service struct {
 	repository *Repository
+	JWTService *JWTService
 }
 
-func NewService(repository *Repository) *Service {
+func NewService(repository *Repository, jwtService *JWTService) *Service {
 	return &Service{
 		repository: repository,
+		JWTService: jwtService,
 	}
 }
 
@@ -40,4 +42,29 @@ func (s *Service) Signup(request SignupRequest) error {
 	}
 
 	return s.repository.CreateUser(&user)
+}
+
+func (s *Service) Login(request LoginRequest) (*LoginResponse, error) {
+	user, err := s.repository.FindByEmail(request.Email)
+	if err != nil {
+		return nil, errors.New("invalid email or password")
+	}
+
+	err = bcrypt.CompareHashAndPassword(
+		[]byte(user.PasswordHash),
+		[]byte(request.Password),
+	)
+
+	if err != nil {
+		return nil, errors.New("invalid email or password")
+	}
+
+	token, err := s.JWTService.GenerateToken(user.ID.String(), user.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginResponse{
+		AccessToken: token,
+	}, nil
 }

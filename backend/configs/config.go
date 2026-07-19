@@ -11,6 +11,8 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+
+	JWTSecret string
 }
 
 var AppConfig Config

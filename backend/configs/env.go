@@ -9,8 +9,9 @@ import (
 
 func LoadEnv() {
 
+	// Try to load .env (only needed for local development)
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Failed to load .env")
+		log.Println("⚠️ .env file not found, using environment variables")
 	}
 
 	AppConfig = Config{
@@ -24,6 +25,7 @@ func LoadEnv() {
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 		DBSSLMode:  os.Getenv("DB_SSLMODE"),
+		JWTSecret:  os.Getenv("JWT_SECRET"),
 	}
 
 	log.Println("✅ Environment Loaded")
