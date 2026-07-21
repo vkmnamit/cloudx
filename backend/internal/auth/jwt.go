@@ -15,12 +15,12 @@ type Claims struct {
 }
 
 type JWTService struct {
-	secret []byte
+	secret string
 }
 
 func NewJWTService(secret string) *JWTService {
 	return &JWTService{
-		secret: []byte(secret),
+		secret: secret,
 	}
 }
 
@@ -38,7 +38,7 @@ func (j *JWTService) GenerateToken(userID, email string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(j.secret)
+	return token.SignedString([]byte(j.secret))
 }
 
 // ValidateToken verifies the token and returns its claims.
@@ -52,7 +52,7 @@ func (j *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 				return nil, errors.New("unexpected signing method")
 			}
 
-			return j.secret, nil
+			return []byte(j.secret), nil
 		},
 	)
 
