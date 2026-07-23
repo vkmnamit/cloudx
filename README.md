@@ -1,6 +1,6 @@
 
 
-# 🚀 CloudX
+#  CloudX
 
 > **CloudX** is a self-hosted Platform as a Service (PaaS) that automatically builds, deploys, and manages applications directly from GitHub repositories using Docker.
 
@@ -10,7 +10,7 @@ Instead of manually provisioning servers, writing deployment scripts, or configu
 
 ---
 
-# ✨ Features
+# Features
 
 ## Authentication & Security
 
@@ -247,7 +247,7 @@ Services:
 
 ---
 
-# 🏗 Architecture
+#  Architecture
 
 ```
                      Client
@@ -350,7 +350,7 @@ README.md
 
 ---
 
-# 🚀 Installation
+#  Installation
 
 Clone
 
@@ -376,7 +376,7 @@ http://localhost:8080
 
 ---
 
-# 🧪 API Testing
+# API Testing
 
 ## Register
 
@@ -496,7 +496,7 @@ GET /api/deployments/:id/logs
 
 ---
 
-# 🗄 Database
+#  Database
 
 Current tables
 
@@ -522,7 +522,7 @@ refresh_tokens
 
 ---
 
-# 🔮 Roadmap
+#  Roadmap
 
 * Custom Domains
 * Automatic SSL (Let's Encrypt)
@@ -542,7 +542,7 @@ refresh_tokens
 
 ---
 
-# 🤝 Contributing
+# Contributing
 
 ```bash
 git clone
