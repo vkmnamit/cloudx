@@ -4,13 +4,16 @@ import "time"
 
 // EnvVar represents a single environment variable bound to a deployment.
 type EnvVar struct {
-	ID           string    `json:"id"`
-	DeploymentID string    `json:"deployment_id"`
-	Key          string    `json:"key"`
-	Value        string    `json:"value,omitempty"` // omitted in list responses for secrets
-	IsSecret     bool      `json:"is_secret"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string
+	ServiceID string
+
+	Key   string
+	Value string
+
+	IsSecret bool
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // SetEnvVarsRequest is sent by the client to set multiple env vars at once.

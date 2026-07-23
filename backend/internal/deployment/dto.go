@@ -4,9 +4,9 @@ import "github.com/vkmnamit/cloudx/internal/environment"
 
 // DeployRequest is the payload sent by the client to trigger a deployment.
 type DeployRequest struct {
-	ProjectName string                       `json:"project_name" binding:"required"`
-	RepoURL     string                       `json:"repo_url"     binding:"required"`
-	EnvVars     []environment.EnvVarInput    `json:"env_vars"`
+	ServiceID string `json:"service_id"`
+
+	EnvVars []environment.EnvVarInput `json:"env_vars"`
 }
 
 // DeployResponse is what we return after a deployment is created.

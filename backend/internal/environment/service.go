@@ -31,23 +31,23 @@ func (s *envService) SetVars(ctx context.Context, deploymentID string, inputs []
 	vars := make([]*EnvVar, 0, len(inputs))
 	for _, in := range inputs {
 		vars = append(vars, &EnvVar{
-			DeploymentID: deploymentID,
-			Key:          in.Key,
-			Value:        in.Value,
-			IsSecret:     in.IsSecret,
+			ServiceID: deploymentID,
+			Key:       in.Key,
+			Value:     in.Value,
+			IsSecret:  in.IsSecret,
 		})
 	}
 	return s.repo.Set(ctx, vars)
 }
 
 func (s *envService) GetVars(ctx context.Context, deploymentID string) ([]*EnvVar, error) {
-	return s.repo.ListByDeployment(ctx, deploymentID)
+	return s.repo.ListByService(ctx, deploymentID)
 }
 
 // ToDockerArgs fetches all env vars for the deployment and returns them
 // in the format docker expects: ["-e", "KEY=VALUE", "-e", "KEY2=VALUE2"]
 func (s *envService) ToDockerArgs(ctx context.Context, deploymentID string) ([]string, error) {
-	vars, err := s.repo.ListByDeployment(ctx, deploymentID)
+	vars, err := s.repo.ListByService(ctx, deploymentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load env vars: %w", err)
 	}

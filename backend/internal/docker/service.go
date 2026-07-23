@@ -8,15 +8,13 @@ import (
 	"path/filepath"
 
 	"github.com/vkmnamit/cloudx/internal/analyzer"
+	"github.com/vkmnamit/cloudx/internal/templates"
 )
 
-// DockerService is responsible for generating Dockerfiles and building images.
-// It does NOT run containers — that's RuntimeService's job.
+// DockerService generates Dockerfiles and builds images for deployments.
 type DockerService interface {
-	GenerateDockerfile(analysis *analyzer.Analysis, destPath string) error
-	// BuildImage builds a Docker image. Build stdout/stderr is written to logWriter
-	// so every line is captured in deployment_logs.
-	BuildImage(projectPath string, imageName string, logWriter io.Writer) error
+	GenerateDockerfile(analysis *analyzer.Analysis, dockerfilePath string, port int) error
+	BuildImage(buildContext string, dockerfilePath string, imageTag string, logWriter io.Writer) error
 }
 
 type dockerService struct{}
@@ -25,73 +23,41 @@ func NewDockerService() DockerService {
 	return &dockerService{}
 }
 
-// GenerateDockerfile writes a language-specific Dockerfile to destPath.
-// If a Dockerfile already exists, it is a no-op.
-func (s *dockerService) GenerateDockerfile(analysis *analyzer.Analysis, destPath string) error {
-	if analysis.DockerfileExists {
-		return nil
+func (s *dockerService) GenerateDockerfile(analysis *analyzer.Analysis, dockerfilePath string, port int) error {
+	// If a Dockerfile already exists, respect it.
+	if analysis != nil && analysis.DockerfileExists {
+		if _, err := os.Stat(dockerfilePath); err == nil {
+			return nil
+		}
 	}
 
-	var content string
-	switch analysis.Language {
-	case "Node.js":
-		content = fmt.Sprintf(`FROM node:18-alpine
-WORKDIR /app
-COPY . .
-RUN %s
-EXPOSE %d
-CMD ["%s"]
-`, analysis.BuildCommand, analysis.ExposedPort, analysis.StartCommand)
-
-	case "Go":
-		content = fmt.Sprintf(`FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN %s
-
-FROM alpine:latest
-WORKDIR /app
-COPY --from=builder /app/main .
-EXPOSE %d
-CMD ["%s"]
-`, analysis.BuildCommand, analysis.ExposedPort, analysis.StartCommand)
-
-	case "Python":
-		content = fmt.Sprintf(`FROM python:3.11-slim
-WORKDIR /app
-COPY . .
-RUN %s
-EXPOSE %d
-CMD ["%s"]
-`, analysis.BuildCommand, analysis.ExposedPort, analysis.StartCommand)
-
-	case "Rust":
-		content = fmt.Sprintf(`FROM rust:1.75-slim AS builder
-WORKDIR /app
-COPY . .
-RUN %s
-
-FROM debian:bookworm-slim
-WORKDIR /app
-COPY --from=builder /app/target/release/app .
-EXPOSE %d
-CMD ["%s"]
-`, analysis.BuildCommand, analysis.ExposedPort, analysis.StartCommand)
-
-	default:
-		return fmt.Errorf("unsupported language for dockerfile generation: %s", analysis.Language)
+	if err := os.MkdirAll(filepath.Dir(dockerfilePath), 0o755); err != nil {
+		return fmt.Errorf("failed to create dockerfile directory: %w", err)
 	}
 
-	return os.WriteFile(filepath.Join(destPath, "Dockerfile"), []byte(content), 0644)
+	if port > 0 && analysis != nil {
+		analysis.ExposedPort = port
+	} else if port <= 0 && analysis != nil && analysis.ExposedPort <= 0 {
+		analysis.ExposedPort = 8080
+	} else if port <= 0 && analysis == nil {
+		return fmt.Errorf("port must be > 0 or analysis must provide a port")
+	}
+
+	content, err := templates.RenderDockerfile(analysis)
+	if err != nil {
+		return fmt.Errorf("failed to render dockerfile: %w", err)
+	}
+
+	if err := os.WriteFile(dockerfilePath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("failed to write dockerfile: %w", err)
+	}
+
+	return nil
 }
 
-// BuildImage runs `docker build` using os/exec.
-// logWriter (from LogService.NewWriter) receives every line of build output.
-// Note: In a production system, this would use the Docker Engine API instead of shelling out.
-func (s *dockerService) BuildImage(projectPath string, imageName string, logWriter io.Writer) error {
-	cmd := exec.Command("docker", "build", "-t", imageName, ".")
-	cmd.Dir = projectPath
-
+func (s *dockerService) BuildImage(buildContext string, dockerfilePath string, imageTag string, logWriter io.Writer) error {
+	args := []string{"build", "-t", imageTag, "-f", dockerfilePath, buildContext}
+	cmd := exec.Command("docker", args...)
 	if logWriter != nil {
 		cmd.Stdout = logWriter
 		cmd.Stderr = logWriter
@@ -100,5 +66,8 @@ func (s *dockerService) BuildImage(projectPath string, imageName string, logWrit
 		cmd.Stderr = os.Stderr
 	}
 
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("docker build failed: %w", err)
+	}
+	return nil
 }

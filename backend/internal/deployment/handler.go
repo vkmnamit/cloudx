@@ -24,9 +24,18 @@ func (h *Handler) Deploy(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userIDValue, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+	userID, ok := userIDValue.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user context"})
+		return
+	}
 
-	dep, err := h.service.Deploy(c.Request.Context(), userID.(string), req)
+	dep, err := h.service.Deploy(c.Request.Context(), userID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -37,9 +46,18 @@ func (h *Handler) Deploy(c *gin.Context) {
 
 // GetDeployments handles GET /deployments
 func (h *Handler) GetDeployments(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userIDValue, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+	userID, ok := userIDValue.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user context"})
+		return
+	}
 
-	deps, err := h.service.ListDeployments(c.Request.Context(), userID.(string))
+	deps, err := h.service.ListDeployments(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

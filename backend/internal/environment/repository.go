@@ -11,7 +11,7 @@ import (
 // Repository persists and retrieves environment variables.
 type Repository interface {
 	Set(ctx context.Context, vars []*EnvVar) error
-	ListByDeployment(ctx context.Context, deploymentID string) ([]*EnvVar, error)
+	ListByService(ctx context.Context, serviceID string) ([]*EnvVar, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -27,10 +27,22 @@ func NewRepository(db *pgx.Conn) Repository {
 // Uses ON CONFLICT to update existing keys.
 func (r *repository) Set(ctx context.Context, vars []*EnvVar) error {
 	query := `
-		INSERT INTO environment_variables (id, deployment_id, key, value, is_secret, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (deployment_id, key)
-		DO UPDATE SET value = EXCLUDED.value, is_secret = EXCLUDED.is_secret, updated_at = NOW()
+		INSERT INTO environment_variables (
+id,
+service_id,
+variable_key,
+variable_value,
+is_secret,
+created_at,
+updated_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+ON CONFLICT (service_id, variable_key)
+DO UPDATE
+SET
+variable_value = EXCLUDED.variable_value,
+is_secret = EXCLUDED.is_secret,
+updated_at = NOW();
 	`
 	for _, v := range vars {
 		if v.ID == "" {
@@ -43,7 +55,7 @@ func (r *repository) Set(ctx context.Context, vars []*EnvVar) error {
 		v.UpdatedAt = now
 
 		_, err := r.db.Exec(ctx, query,
-			v.ID, v.DeploymentID, v.Key, v.Value, v.IsSecret, v.CreatedAt, v.UpdatedAt,
+			v.ID, v.ServiceID, v.Key, v.Value, v.IsSecret, v.CreatedAt, v.UpdatedAt,
 		)
 		if err != nil {
 			return err
@@ -52,14 +64,21 @@ func (r *repository) Set(ctx context.Context, vars []*EnvVar) error {
 	return nil
 }
 
-func (r *repository) ListByDeployment(ctx context.Context, deploymentID string) ([]*EnvVar, error) {
+func (r *repository) ListByService(ctx context.Context, serviceID string) ([]*EnvVar, error) {
 	query := `
-		SELECT id, deployment_id, key, value, is_secret, created_at, updated_at
-		FROM environment_variables
-		WHERE deployment_id = $1
-		ORDER BY key ASC
+		SELECT
+id,
+service_id,
+variable_key,
+variable_value,
+is_secret,
+created_at,
+updated_at
+FROM environment_variables
+WHERE service_id=$1
+ORDER BY variable_key;
 	`
-	rows, err := r.db.Query(ctx, query, deploymentID)
+	rows, err := r.db.Query(ctx, query, serviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +87,7 @@ func (r *repository) ListByDeployment(ctx context.Context, deploymentID string) 
 	var vars []*EnvVar
 	for rows.Next() {
 		v := &EnvVar{}
-		if err := rows.Scan(&v.ID, &v.DeploymentID, &v.Key, &v.Value, &v.IsSecret, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.ServiceID, &v.Key, &v.Value, &v.IsSecret, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			return nil, err
 		}
 		vars = append(vars, v)

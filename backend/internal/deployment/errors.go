@@ -2,9 +2,10 @@ package deployment
 
 // Status constants represent the lifecycle of a deployment.
 const (
-	StatusPending  = "pending"
-	StatusBuilding = "building"
-	StatusRunning  = "running"
-	StatusFailed   = "failed"
-	StatusStopped  = "stopped"
+	StatusQueued    = "QUEUED"
+	StatusBuilding  = "BUILDING"
+	StatusDeploying = "DEPLOYING"
+	StatusRunning   = "RUNNING"
+	StatusFailed    = "FAILED"
+	StatusCancelled = "CANCELLED"
 )

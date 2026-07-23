@@ -1,0 +1,16 @@
+FROM rust:1.80-alpine AS builder
+RUN apk add --no-cache musl-dev
+WORKDIR /app
+COPY . .
+{{- if .BuildCommand }}
+RUN {{ .BuildCommand }}
+{{- else }}
+RUN cargo build --release
+{{- end }}
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/target/release/app ./
+EXPOSE {{ .ExposedPort }}
+ENV PORT={{ .ExposedPort }}
+CMD ["./app"]

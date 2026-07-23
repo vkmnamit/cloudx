@@ -14,6 +14,9 @@ RUN go build -o cloudx ./cmd/server
 # ---------- Runtime Stage ----------
 FROM alpine:latest
 
+# Install git for repository cloning and docker-cli for container orchestration
+RUN apk add --no-cache git docker-cli curl
+
 WORKDIR /app
 
 COPY --from=builder /app/cloudx .

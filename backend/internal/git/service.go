@@ -13,7 +13,10 @@ import (
 type GitService interface {
 	// Clone clones a remote repository into a local directory.
 	// Returns the absolute path to the cloned project.
-	Clone(repoURL string, destDir string) (string, error)
+	Clone(repoURL string, branch string, destDir string) (string, error)
+
+	// CommitMetadata returns the current commit SHA and message from a local checkout.
+	CommitMetadata(projectPath string) (sha string, message string, err error)
 
 	// Pull pulls the latest changes for a repo that was already cloned.
 	Pull(projectPath string) error
@@ -31,7 +34,7 @@ func NewGitService(baseDir string) GitService {
 
 // Clone performs a shallow `git clone` of repoURL into baseDir/<slug>.
 // If the directory already exists, it pulls instead of cloning.
-func (s *gitService) Clone(repoURL string, destDir string) (string, error) {
+func (s *gitService) Clone(repoURL string, branch string, destDir string) (string, error) {
 	if err := os.MkdirAll(s.baseDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create base dir: %w", err)
 	}
@@ -49,7 +52,12 @@ func (s *gitService) Clone(repoURL string, destDir string) (string, error) {
 	}
 
 	// Shallow clone (depth=1) for speed
-	cmd := exec.Command("git", "clone", "--depth=1", repoURL, target)
+	args := []string{"clone", "--depth=1"}
+	if branch != "" {
+		args = append(args, "--branch", branch)
+	}
+	args = append(args, repoURL, target)
+	cmd := exec.Command("git", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -58,6 +66,25 @@ func (s *gitService) Clone(repoURL string, destDir string) (string, error) {
 	}
 
 	return target, nil
+}
+
+// CommitMetadata returns the HEAD SHA and commit message for a cloned repository.
+func (s *gitService) CommitMetadata(projectPath string) (string, string, error) {
+	shaCmd := exec.Command("git", "rev-parse", "HEAD")
+	shaCmd.Dir = projectPath
+	shaOut, err := shaCmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("git rev-parse failed: %w", err)
+	}
+
+	msgCmd := exec.Command("git", "log", "-1", "--pretty=%B")
+	msgCmd.Dir = projectPath
+	msgOut, err := msgCmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("git log failed: %w", err)
+	}
+
+	return strings.TrimSpace(string(shaOut)), strings.TrimSpace(string(msgOut)), nil
 }
 
 // Pull runs `git pull` in the given project directory.
