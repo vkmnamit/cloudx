@@ -143,12 +143,27 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 		return dep, fmt.Errorf("analysis failed: %w", err)
 	}
 
+	if analysis.ProjectRoot != "" && analysis.ProjectRoot != buildContext {
+		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelInfo, "Found project in sub-directory: "+filepath.Base(analysis.ProjectRoot))
+		buildContext = analysis.ProjectRoot
+		
+		// If the original dockerfile path was a relative default, update it to the new root
+		if serviceRecord.DockerfilePath == "" || serviceRecord.DockerfilePath == "./Dockerfile" || serviceRecord.DockerfilePath == "Dockerfile" {
+			dockerfilePath = filepath.Join(buildContext, "Dockerfile")
+		}
+	}
+
 	dep.Status = StatusBuilding
 	_ = s.repo.UpdateStatus(ctx, dep.ID, StatusBuilding)
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelInfo,
 		fmt.Sprintf("Detected: %s / %s (port %d)", analysis.Language, analysis.Framework, analysis.ExposedPort))
 
 	// ── Step 5: Generate Dockerfile ──────────────────────────────────
+	// Ensure the runtime port matches the detected application port
+	if analysis.ExposedPort > 0 {
+		port = analysis.ExposedPort
+	}
+	
 	if err := s.docker.GenerateDockerfile(analysis, dockerfilePath, port); err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelError, "Dockerfile generation failed: "+err.Error())
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)

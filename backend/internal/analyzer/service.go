@@ -20,6 +20,7 @@ type Analysis struct {
 	DockerfileExists bool
 	ComposeExists    bool
 	ModuleName       string
+	ProjectRoot      string // The directory where the project was actually found
 }
 
 // AnalyzerService analyzes a project directory and returns an Analysis.
@@ -34,6 +35,46 @@ func NewAnalyzerService() AnalyzerService {
 }
 
 func (s *analyzerService) Analyze(projectPath string) (*Analysis, error) {
+	// First, check the root directory
+	analysis, err := s.analyzeDir(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	if analysis.Language != "unknown" || analysis.DockerfileExists {
+		return analysis, nil
+	}
+
+	// If unknown, do a shallow search (depth 1 from root)
+	entries, err := os.ReadDir(projectPath)
+	if err != nil {
+		return analysis, nil
+	}
+
+	var lastErr error
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue // skip files and hidden dirs (like .git)
+		}
+
+		subPath := filepath.Join(projectPath, entry.Name())
+		subAnalysis, err := s.analyzeDir(subPath)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if subAnalysis.Language != "unknown" || subAnalysis.DockerfileExists {
+			return subAnalysis, nil
+		}
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+
+	return analysis, nil
+}
+
+func (s *analyzerService) analyzeDir(projectPath string) (*Analysis, error) {
 	result := &Analysis{
 		Language:       "unknown",
 		Framework:      "unknown",
@@ -41,6 +82,7 @@ func (s *analyzerService) Analyze(projectPath string) (*Analysis, error) {
 		BuildCommand:   "",
 		StartCommand:   "",
 		ExposedPort:    8080,
+		ProjectRoot:    projectPath,
 	}
 
 	if _, err := os.Stat(filepath.Join(projectPath, "docker-compose.yml")); err == nil {
@@ -77,8 +119,10 @@ func (s *analyzerService) Analyze(projectPath string) (*Analysis, error) {
 				Dependencies    map[string]string `json:"dependencies"`
 				DevDependencies map[string]string `json:"devDependencies"`
 				Scripts         struct {
-					Start string `json:"start"`
-					Build string `json:"build"`
+					Start   string `json:"start"`
+					Build   string `json:"build"`
+					Dev     string `json:"dev"`
+					Preview string `json:"preview"`
 				} `json:"scripts"`
 			}
 			if err := json.Unmarshal(data, &pkg); err == nil {
@@ -95,20 +139,30 @@ func (s *analyzerService) Analyze(projectPath string) (*Analysis, error) {
 				} else if hasDep(pkg.Dependencies, "react") && hasDep(pkg.Dependencies, "react-scripts") {
 					result.Framework = "React"
 					result.ExposedPort = 3000
-				} else if hasDep(pkg.DevDependencies, "vite") {
+				} else if hasDep(pkg.DevDependencies, "vite") || hasDep(pkg.Dependencies, "vite") {
 					result.Framework = "Vite"
-					result.ExposedPort = 5173 // Default vite port, though typically dev only. Assuming build output is served.
+					result.ExposedPort = 5173
 				}
 
 				if pkg.Scripts.Build != "" {
 					result.BuildCommand = result.PackageManager + " run build"
 				}
+				
+				// General StartCommand Inference
 				if pkg.Scripts.Start != "" {
 					result.StartCommand = result.PackageManager + " run start"
-					if strings.Contains(pkg.Scripts.Start, "PORT=") {
-						// Simple heuristic to extract PORT=xxxx
-						// (A more complex regex might be needed for production)
+				} else if pkg.Scripts.Preview != "" {
+					result.StartCommand = result.PackageManager + " run preview"
+					if result.Framework == "Vite" {
+						result.StartCommand += fmt.Sprintf(" -- --host 0.0.0.0 --port %d", result.ExposedPort)
 					}
+				} else if pkg.Scripts.Dev != "" {
+					result.StartCommand = result.PackageManager + " run dev"
+					if result.Framework == "Vite" {
+						result.StartCommand += fmt.Sprintf(" -- --host 0.0.0.0 --port %d", result.ExposedPort)
+					}
+				} else {
+					return nil, fmt.Errorf("no runnable script found in package.json. Expected one of: start, preview, or dev")
 				}
 			}
 		}

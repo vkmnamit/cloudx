@@ -112,8 +112,13 @@ func (s *runtimeService) WaitUntilHealthy(ctx context.Context, containerID strin
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	target := fmt.Sprintf("localhost:%d", hostPort)
-
+	targets := []string{}
+	if gw := os.Getenv("DOCKER_HOST_GATEWAY"); gw != "" {
+		targets = append(targets, fmt.Sprintf("%s:%d", gw, hostPort))
+	} else {
+		targets = append(targets, fmt.Sprintf("host.docker.internal:%d", hostPort))
+		targets = append(targets, fmt.Sprintf("localhost:%d", hostPort))
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -126,19 +131,20 @@ func (s *runtimeService) WaitUntilHealthy(ctx context.Context, containerID strin
 			}
 
 			// Try TCP dial
-			conn, err := net.DialTimeout("tcp", target, 500*time.Millisecond)
-			if err == nil {
-				conn.Close()
-				
-				// Optional: Try HTTP GET / to see if it responds, but we don't strictly require 200 OK.
-				// Since some services don't have a / endpoint, if TCP works and it doesn't immediately close, we consider it up.
-				client := http.Client{Timeout: 2 * time.Second}
-				resp, err := client.Get(fmt.Sprintf("http://%s/", target))
+			for _, target := range targets {
+				conn, err := net.DialTimeout("tcp", target, 500*time.Millisecond)
 				if err == nil {
-					resp.Body.Close()
+					conn.Close()
+					
+					// Optional: Try HTTP GET / to see if it responds, but we don't strictly require 200 OK.
+					client := http.Client{Timeout: 2 * time.Second}
+					resp, err := client.Get(fmt.Sprintf("http://%s/", target))
+					if err == nil {
+						resp.Body.Close()
+					}
+					// Regardless of HTTP response (even 404 or 500), the process is up and listening.
+					return nil
 				}
-				// Regardless of HTTP response (even 404 or 500), the process is up and listening.
-				return nil
 			}
 		}
 	}
