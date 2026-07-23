@@ -1,91 +1,358 @@
-# CloudX
 
-CloudX is a self-hosted Platform as a Service (PaaS) designed to simplify application deployment and infrastructure management. It provides a unified platform for deploying, managing, and monitoring containerized applications while maintaining full control over the underlying infrastructure.
 
-The project is being built as a production-grade platform inspired by modern cloud deployment systems such as Railway, Render, and Fly.io.
+# 🚀 CloudX
 
-## Features
+> **CloudX** is a self-hosted Platform as a Service (PaaS) that automatically builds, deploys, and manages applications directly from GitHub repositories using Docker.
 
-### Current
+CloudX is inspired by platforms like **Railway**, **Render**, **Fly.io**, and **Heroku**, while giving developers complete ownership of their infrastructure.
 
-- User Authentication
-- JWT-based Authorization
-- PostgreSQL Integration
-- Dockerized Backend
-- REST API
-- Layered Architecture (Handler → Service → Repository)
-- Environment-based Configuration
-
-### Planned
-
-- GitHub OAuth
-- Project Management
-- Application Deployments
-- Docker Engine Integration
-- Reverse Proxy
-- SSL Certificate Management
-- Build Pipeline
-- Deployment Logs
-- Metrics & Monitoring
-- Resource Management
-- Multi-Node Support
+Instead of manually provisioning servers, writing deployment scripts, or configuring reverse proxies, CloudX automates the deployment pipeline from repository to running application.
 
 ---
 
-## Technology Stack
+# ✨ Features
 
-### Backend
+## Authentication & Security
 
-- Go
-- Gin
-- PostgreSQL
-- pgx
-- Docker
-- Docker Compose
-
-### Architecture
-
-- Clean Architecture
-- Repository Pattern
-- Service Layer
-- RESTful APIs
+* JWT Authentication
+* Refresh Tokens
+* Password Hashing (bcrypt)
+* Protected APIs
+* Role-Based Authorization (RBAC)
+* Authentication Middleware
 
 ---
 
-## Project Structure
+## Organizations
+
+* Create Organizations
+* Invite Members
+* Role Management
+* Multi-Organization Support
+
+---
+
+## Projects
+
+* Create Projects
+* Connect GitHub Repository
+* Branch Selection
+* Project Configuration
+
+---
+
+## Services
+
+Each project can contain multiple deployable services.
+
+Supports:
+
+* Environment Variables
+* Build Context
+* Custom Build Commands
+* Start Commands
+* Automatic Port Detection
+* Language Detection
+
+---
+
+## GitHub Integration
+
+* GitHub OAuth
+* Repository Selection
+* Branch Selection
+* Commit Tracking
+* Clone Repository
+
+---
+
+## Intelligent Project Analyzer
+
+CloudX automatically detects:
+
+* Programming Language
+* Framework
+* Project Root
+* Build Context
+* Dockerfile
+* Start Command
+* Exposed Port
+
+Supports:
+
+* React
+* Vite
+* Next.js
+* Go
+* Node.js
+* Python
+
+Automatically detects nested repositories like:
+
+```
+repo/
+    frontend/
+```
+
+without any manual configuration.
+
+---
+
+## Automatic Dockerfile Generation
+
+CloudX generates optimized Dockerfiles automatically.
+
+Supports:
+
+* Node
+* Go
+* Python
+
+If a Dockerfile already exists, CloudX uses it instead.
+
+---
+
+## Docker Runtime
+
+Automatically:
+
+* Build Docker Images
+* Create Containers
+* Create Networks
+* Inject Environment Variables
+* Publish Ports
+* Start Containers
+* Stop Containers
+* Remove Containers
+
+---
+
+## Deployments
+
+One-click deployment pipeline:
+
+```
+GitHub Repository
+        ↓
+Clone Repository
+        ↓
+Analyze Project
+        ↓
+Generate Dockerfile
+        ↓
+Build Docker Image
+        ↓
+Create Container
+        ↓
+Health Check
+        ↓
+Running
+```
+
+Each deployment stores:
+
+* Commit SHA
+* Commit Message
+* Image Tag
+* Build Status
+* Logs
+* Start Time
+* Finish Time
+
+---
+
+## Health Checks
+
+CloudX continuously validates deployments before marking them as running.
+
+Health checks verify:
+
+* Container Status
+* HTTP Response
+* Application Availability
+
+---
+
+## Environment Variables
+
+Supports runtime environment variables.
+
+Example:
+
+```
+DATABASE_URL
+JWT_SECRET
+API_KEY
+REDIS_URL
+```
+
+---
+
+## REST API
+
+Production-ready REST APIs built using Gin.
+
+---
+
+## PostgreSQL
+
+Stores:
+
+* Users
+* Organizations
+* Projects
+* Services
+* Deployments
+* Environment Variables
+
+---
+
+## Dockerized Infrastructure
+
+Everything runs inside Docker.
+
+Services:
+
+* Backend
+* PostgreSQL
+
+---
+
+# 🛠 Technology Stack
+
+## Backend
+
+* Go
+* Gin
+* PostgreSQL
+* pgx
+* JWT
+* bcrypt
+
+---
+
+## Infrastructure
+
+* Docker
+* Docker Compose
+* Docker Engine API
+
+---
+
+## Deployment
+
+* GitHub
+* Docker Build
+* Docker Runtime
+
+---
+
+# 🏗 Architecture
+
+```
+                     Client
+                        │
+                        ▼
+               Gin HTTP Server
+                        │
+                        ▼
+                 Authentication
+                        │
+                        ▼
+                  API Handlers
+                        │
+                        ▼
+               Application Services
+                        │
+                        ▼
+                 Repository Layer
+                        │
+                        ▼
+                 PostgreSQL Database
+```
+
+Deployment Pipeline
+
+```
+Deploy Request
+      │
+      ▼
+GitHub Clone
+      │
+      ▼
+Analyzer
+      │
+      ▼
+Dockerfile Generator
+      │
+      ▼
+Docker Build
+      │
+      ▼
+Runtime Manager
+      │
+      ▼
+Health Check
+      │
+      ▼
+Deployment Running
+```
+
+---
+
+# 📂 Project Structure
 
 ```
 cloudx/
 
-├── backend/
-│   ├── cmd/
-│   │   └── server/
-│   ├── configs/
-│   ├── internal/
-│   │   ├── auth/
-│   │   ├── middleware/
-│   │   └── router/
-│   ├── migrations/
-│   ├── pkg/
-│   ├── Dockerfile
-│   ├── go.mod
-│   └── go.sum
-│
-├── docker-compose.yml
-└── README.md
+backend/
+
+cmd/
+server/
+
+configs/
+
+internal/
+
+auth/
+deployment/
+docker/
+github/
+middleware/
+organization/
+project/
+repository/
+runtime/
+service/
+router/
+analyzer/
+database/
+
+migrations/
+
+pkg/
+
+Dockerfile
+
+docker-compose.yml
+
+README.md
 ```
 
 ---
 
-## Getting Started
+# ⚙ Requirements
 
-### Prerequisites
+* Go 1.26+
+* Docker 29+
+* Docker Compose
+* PostgreSQL 17
 
-- Go 1.26+
-- Docker
-- Docker Compose
+---
 
-### Clone the Repository
+# 🚀 Installation
+
+Clone
 
 ```bash
 git clone https://github.com/vkmnamit/cloudx.git
@@ -93,13 +360,15 @@ git clone https://github.com/vkmnamit/cloudx.git
 cd cloudx
 ```
 
-### Run with Docker
+---
+
+Run
 
 ```bash
 docker compose up --build
 ```
 
-The backend will be available at:
+Backend
 
 ```
 http://localhost:8080
@@ -107,71 +376,196 @@ http://localhost:8080
 
 ---
 
-## Local Development
+# 🧪 API Testing
+
+## Register
+
+```http
+POST /api/signup
+```
+
+Body
+
+```json
+{
+  "name": "Namit",
+  "email": "namit@example.com",
+  "password": "password123"
+}
+```
+
+Response
+
+```json
+{
+  "message": "User created successfully"
+}
+```
+
+---
+
+## Login
+
+```http
+POST /api/login
+```
+
+Body
+
+```json
+{
+  "email": "namit@example.com",
+  "password": "password123"
+}
+```
+
+Response
+
+```json
+{
+  "access_token": "...",
+  "refresh_token": "..."
+}
+```
+
+---
+
+## Create Organization
+
+```
+POST /api/organizations
+Authorization: Bearer TOKEN
+```
+
+---
+
+## Create Project
+
+```
+POST /api/projects
+Authorization: Bearer TOKEN
+```
+
+---
+
+## Connect GitHub Repository
+
+```
+POST /api/github/connect
+```
+
+---
+
+## Create Service
+
+```
+POST /api/services
+```
+
+---
+
+## Deploy Application
+
+```
+POST /api/deployments
+```
+
+Example
+
+```json
+{
+    "service_id":"xxxxxxxx"
+}
+```
+
+---
+
+## Deployment Status
+
+```
+GET /api/deployments/:id
+```
+
+---
+
+## Deployment Logs
+
+```
+GET /api/deployments/:id/logs
+```
+
+---
+
+# 🗄 Database
+
+Current tables
+
+```
+users
+
+organizations
+
+organization_members
+
+projects
+
+services
+
+deployments
+
+deployment_logs
+
+environment_variables
+
+refresh_tokens
+```
+
+---
+
+# 🔮 Roadmap
+
+* Custom Domains
+* Automatic SSL (Let's Encrypt)
+* Reverse Proxy (Traefik/Caddy)
+* Webhooks
+* Auto Deploy on Push
+* Live Deployment Logs
+* Metrics Dashboard
+* CPU & Memory Monitoring
+* Horizontal Scaling
+* Multi-Node Clusters
+* Rollbacks
+* Secret Management
+* CLI
+* Kubernetes Runtime
+* AI-assisted Deployment Insights
+
+---
+
+# 🤝 Contributing
 
 ```bash
-cd backend
+git clone
 
-go mod tidy
+git checkout -b feature/my-feature
 
-go run ./cmd/server
+git commit
+
+git push
+
+open pull request
 ```
 
 ---
 
-## Configuration
-
-Create a `.env` file inside the `backend` directory.
-
-Example:
-
-```env
-APP_NAME=CloudX
-PORT=8080
-ENV=development
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=cloudx
-DB_SSLMODE=disable
-```
-
-When running with Docker:
-
-```env
-DB_HOST=postgres
-```
-
----
-
-## API
-
-| Method | Endpoint | Description |
-|----------|----------|-------------|
-| POST | `/api/signup` | Register a new user |
-| POST | `/api/login` | Authenticate a user |
-
----
-
-## Roadmap
-
-- Authentication
-- Authorization
-- Organizations
-- Projects
-- Deployments
-- GitHub Integration
-- Docker Runtime
-- Reverse Proxy
-- SSL Automation
-- Monitoring
-- CI/CD
-- Multi-node Infrastructure
-
----
-
-## License
+# 📄 License
 
 This project is licensed under the MIT License.
+
+---
+
+## One suggestion
+
+Your README has outgrown a simple document. At CloudX's current stage, it would be worth adding:
+
+
