@@ -4,16 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Handler exposes log endpoints.
 type Handler struct {
 	service LogService
-	db      *pgx.Conn
+	db      *pgxpool.Pool
 }
 
-func NewHandler(service LogService, db *pgx.Conn) *Handler {
+func NewHandler(service LogService, db *pgxpool.Pool) *Handler {
 	return &Handler{service: service, db: db}
 }
 

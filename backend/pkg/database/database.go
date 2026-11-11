@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vkmnamit/cloudx/configs"
 )
 
-func Connect() (*pgx.Conn, error) {
+func Connect() (*pgxpool.Pool, error) {
 
 	connString := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
@@ -20,8 +20,12 @@ func Connect() (*pgx.Conn, error) {
 		configs.AppConfig.DBSSLMode,
 	)
 
-	conn, err := pgx.Connect(context.Background(), connString)
+	conn, err := pgxpool.New(context.Background(), connString)
 	if err != nil {
+		return nil, err
+	}
+	if err := conn.Ping(context.Background()); err != nil {
+		conn.Close()
 		return nil, err
 	}
 

@@ -4,17 +4,17 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Handler handles HTTP requests and delegates to the Service.
 // It never contains business logic.
 type Handler struct {
 	service Service
-	db      *pgx.Conn
+	db      *pgxpool.Pool
 }
 
-func NewHandler(service Service, db *pgx.Conn) *Handler {
+func NewHandler(service Service, db *pgxpool.Pool) *Handler {
 	return &Handler{service: service, db: db}
 }
 

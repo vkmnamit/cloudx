@@ -9,8 +9,8 @@ func RegisterRoutes(router *gin.RouterGroup, h *Handler, jwtService *auth.JWTSer
 	deployments := router.Group("/deployments")
 	deployments.Use(auth.AuthMiddleware(jwtService))
 
-	deployments.POST("/", h.Deploy)
-	deployments.GET("/", h.GetDeployments)
+	deployments.POST("", h.Deploy)
+	deployments.GET("", h.GetDeployments)
 	deployments.GET("/:id", h.GetDeployment)
 	deployments.DELETE("/:id", h.DeleteDeployment)
 }

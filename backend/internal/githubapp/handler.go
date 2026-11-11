@@ -22,11 +22,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vkmnamit/cloudx/configs"
 )
 
 type Handler struct {
-	db     *pgx.Conn
+	db     *pgxpool.Pool
 	config configs.Config
 	client *http.Client
 }
@@ -49,7 +50,7 @@ type repository struct {
 	Description   string `json:"description"`
 }
 
-func NewHandler(db *pgx.Conn, config configs.Config) *Handler {
+func NewHandler(db *pgxpool.Pool, config configs.Config) *Handler {
 	return &Handler{db: db, config: config, client: &http.Client{Timeout: 15 * time.Second}}
 }
 

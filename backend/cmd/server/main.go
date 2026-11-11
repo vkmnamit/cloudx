@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/vkmnamit/cloudx/configs"
@@ -18,7 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	defer conn.Close(context.Background())
+	defer conn.Close()
 
 	r := router.Setup(conn)
 

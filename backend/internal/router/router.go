@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/vkmnamit/cloudx/configs"
 	"github.com/vkmnamit/cloudx/internal/analyzer"
@@ -23,7 +23,7 @@ import (
 	projectservice "github.com/vkmnamit/cloudx/internal/service"
 )
 
-func Setup(db *pgx.Conn) *gin.Engine {
+func Setup(db *pgxpool.Pool) *gin.Engine {
 
 	r := gin.Default()
 	api := r.Group("/api")

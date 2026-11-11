@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository defines the full persistence interface for deployments.
@@ -20,10 +20,10 @@ type Repository interface {
 }
 
 type repository struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgx.Conn) Repository {
+func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db}
 }
 

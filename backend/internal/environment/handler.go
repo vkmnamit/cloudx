@@ -4,16 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Handler exposes env var endpoints.
 type Handler struct {
 	service EnvironmentService
-	db      *pgx.Conn
+	db      *pgxpool.Pool
 }
 
-func NewHandler(service EnvironmentService, db *pgx.Conn) *Handler {
+func NewHandler(service EnvironmentService, db *pgxpool.Pool) *Handler {
 	return &Handler{service: service, db: db}
 }
 

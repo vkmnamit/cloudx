@@ -2,12 +2,12 @@ package auth
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func RegisterRoutes(
 	rg *gin.RouterGroup,
-	db *pgx.Conn,
+	db *pgxpool.Pool,
 	jwtService *JWTService,
 ) {
 

@@ -3,14 +3,14 @@ package auth
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
-func NewRepository(db *pgx.Conn) *Repository {
+func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{
 		DB: db,
 	}

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository persists and retrieves deployment logs.
@@ -15,10 +15,10 @@ type Repository interface {
 }
 
 type repository struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgx.Conn) Repository {
+func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db}
 }
 
