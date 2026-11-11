@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"github.com/vkmnamit/cloudx/internal/environment"
 	"github.com/vkmnamit/cloudx/internal/git"
 	"github.com/vkmnamit/cloudx/internal/logs"
+	"github.com/vkmnamit/cloudx/internal/proxy"
 	"github.com/vkmnamit/cloudx/internal/runtime"
 	projectservice "github.com/vkmnamit/cloudx/internal/service"
 )
@@ -38,6 +40,7 @@ type service struct {
 	runtime      runtime.RuntimeService
 	logSvc       logs.LogService
 	envSvc       environment.EnvironmentService
+	routeManager proxy.RouteManager
 	githubTokens GitHubTokenProvider
 }
 
@@ -50,17 +53,19 @@ func NewService(
 	r runtime.RuntimeService,
 	l logs.LogService,
 	e environment.EnvironmentService,
+	routeManager proxy.RouteManager,
 	tokenProviders ...GitHubTokenProvider,
 ) Service {
 	result := &service{
-		repo:     repo,
-		service:  serviceSvc,
-		git:      g,
-		analyzer: a,
-		docker:   d,
-		runtime:  r,
-		logSvc:   l,
-		envSvc:   e,
+		repo:         repo,
+		service:      serviceSvc,
+		git:          g,
+		analyzer:     a,
+		docker:       d,
+		runtime:      r,
+		logSvc:       l,
+		envSvc:       e,
+		routeManager: routeManager,
 	}
 	if len(tokenProviders) > 0 {
 		result.githubTokens = tokenProviders[0]
@@ -79,6 +84,10 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	}
 	if serviceRecord.RepositoryURL == "" {
 		return nil, fmt.Errorf("service %s does not have a repository_url configured", serviceRecord.ID)
+	}
+	previousDeployments, err := s.repo.ListRunningByService(ctx, serviceRecord.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load current deployments: %w", err)
 	}
 
 	now := time.Now()
@@ -214,7 +223,7 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Starting container...")
 	runtimeWriter := s.logSvc.NewWriter(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo)
 
-	containerID, hostPort, err := s.runtime.RunContainer(imageTag, envArgs, runtimeWriter, port)
+	containerID, hostPort, err := s.runtime.RunContainer(dep.ID, imageTag, envArgs, runtimeWriter, port)
 	if err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container run failed: "+err.Error())
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
@@ -226,21 +235,81 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 
 	if err := s.runtime.WaitUntilHealthy(ctx, containerID, hostPort, 30*time.Second); err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Health check failed: "+err.Error())
-		_ = s.runtime.StopContainer(containerID)
+		if cleanupErr := s.runtime.DeleteContainer(containerID); cleanupErr != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container cleanup failed: "+cleanupErr.Error())
+		}
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
 		return dep, fmt.Errorf("health check failed: %w", err)
 	}
 
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Health check passed")
 
+	publicURL, err := s.routeManager.URLForService(serviceRecord.ID, serviceRecord.Name)
+	if err != nil {
+		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Public route setup failed: "+err.Error())
+		if cleanupErr := s.runtime.DeleteContainer(containerID); cleanupErr != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container cleanup failed: "+cleanupErr.Error())
+		}
+		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
+		return dep, fmt.Errorf("public route setup failed: %w", err)
+	}
+	dep.PublicURL = publicURL
+	if publicURL != "" {
+		if err := s.repo.UpdatePublicURL(ctx, dep.ID, publicURL); err != nil {
+			if cleanupErr := s.runtime.DeleteContainer(containerID); cleanupErr != nil {
+				_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container cleanup failed: "+cleanupErr.Error())
+			}
+			_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
+			return dep, fmt.Errorf("failed to persist public URL: %w", err)
+		}
+	}
+	publishedURL, err := s.routeManager.Publish(serviceRecord.ID, serviceRecord.Name, dep.ID, port)
+	if err != nil {
+		if publicURL != "" {
+			_ = s.repo.UpdatePublicURL(ctx, dep.ID, "")
+		}
+		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Public route setup failed: "+err.Error())
+		if cleanupErr := s.runtime.DeleteContainer(containerID); cleanupErr != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container cleanup failed: "+cleanupErr.Error())
+		}
+		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
+		return dep, fmt.Errorf("public route setup failed: %w", err)
+	}
+	if publishedURL != publicURL {
+		if publicURL != "" {
+			_ = s.routeManager.Remove(serviceRecord.ID)
+			_ = s.repo.UpdatePublicURL(ctx, dep.ID, "")
+		}
+		if cleanupErr := s.runtime.DeleteContainer(containerID); cleanupErr != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container cleanup failed: "+cleanupErr.Error())
+		}
+		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
+		return dep, fmt.Errorf("public route manager returned an unexpected URL")
+	}
+
 	dep.ImageTag = imageTag
 	dep.FinishedAt = ptrTime(time.Now())
 	dep.Status = StatusRunning
 	dep.UpdatedAt = time.Now()
 
-	_ = s.repo.UpdateStatus(ctx, dep.ID, StatusRunning)
+	if err := s.repo.UpdateStatus(ctx, dep.ID, StatusRunning); err != nil {
+		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Failed to persist running status: "+err.Error())
+		return dep, fmt.Errorf("failed to mark deployment as running: %w", err)
+	}
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo,
 		fmt.Sprintf("Container running on host port %d (container: %s)", hostPort, containerID))
+	if publicURL != "" {
+		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Public URL: "+publicURL)
+	}
+	for _, previous := range previousDeployments {
+		if err := s.runtime.DeleteContainer(deploymentContainerName(previous.ID)); err != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelWarning, fmt.Sprintf("Could not clean up previous deployment %s: %v", previous.ID, err))
+			continue
+		}
+		if err := s.repo.UpdateStatus(ctx, previous.ID, StatusSuperseded); err != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelWarning, fmt.Sprintf("Could not mark previous deployment %s as superseded: %v", previous.ID, err))
+		}
+	}
 
 	return dep, nil
 }
@@ -254,7 +323,35 @@ func (s *service) ListDeployments(ctx context.Context, userID string) ([]*Deploy
 }
 
 func (s *service) DeleteDeployment(ctx context.Context, id string) error {
+	dep, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to load deployment for deletion: %w", err)
+	}
+	if dep.Status == StatusRunning && dep.PublicURL != "" {
+		running, err := s.repo.ListRunningByService(ctx, dep.ServiceID)
+		if err != nil {
+			return fmt.Errorf("failed to determine active deployment: %w", err)
+		}
+		if len(running) > 0 && running[0].ID == dep.ID {
+			if err := s.routeManager.Remove(dep.ServiceID); err != nil {
+				return err
+			}
+		}
+	}
+	if dep.Status == StatusRunning && dep.PublicURL != "" {
+		if err := s.runtime.DeleteContainer(deploymentContainerName(dep.ID)); err != nil {
+			return fmt.Errorf("failed to remove deployment runtime: %w", err)
+		}
+	}
 	return s.repo.Delete(ctx, id)
+}
+
+func deploymentContainerName(deploymentID string) string {
+	id, err := uuid.Parse(deploymentID)
+	if err != nil {
+		return ""
+	}
+	return "cloudx-deployment-" + strings.ReplaceAll(id.String(), "-", "")
 }
 
 func ptrTime(t time.Time) *time.Time {

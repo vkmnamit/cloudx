@@ -1,4 +1,107 @@
 "use client";
-import Link from "next/link";import{useParams}from"next/navigation";import{useEffect,useState}from"react";import{Activity,ArrowLeft,CheckCircle2,Terminal}from"lucide-react";import{AppShell}from"@/components/sidebar";import{api}from"@/lib/api";
-type Deployment={id:string;service_id:string;status:string;created_at:string;commit_sha?:string;commit_message?:string;image_tag?:string};type Log={id:string;phase:string;level:string;message:string;created_at:string};
-export default function DeploymentDetailPage(){const{id}=useParams<{id:string}>();const[item,setItem]=useState<Deployment|null>(null);const[logs,setLogs]=useState<Log[]>([]);const[error,setError]=useState("");useEffect(()=>{if(!localStorage.getItem("cloudx_token")){location.href="/login";return;}Promise.all([api<Deployment>(`/deployments/${id}`),api<Log[]>(`/deployments/${id}/logs`)]).then(([d,l])=>{setItem(d);setLogs(l||[]);}).catch(e=>setError(e.message));},[id]);return <AppShell title="Deployment" description="Build output, release status, and commit metadata."><Link href="/deployments" className="back-link"><ArrowLeft size={14}/> All deployments</Link>{error&&<div className="inline-error">{error}</div>}<section className="panel release-summary"><div><span className="panel-eyebrow">RELEASE STATUS</span><h2><i className={`status-mark ${item?.status.toLowerCase()||""}`}/>{item?.status||"Loading…"}</h2><p>Started {item?new Date(item.created_at).toLocaleString():"—"}</p></div><div className="release-commit"><span>COMMIT</span><b>{item?.commit_sha?.slice(0,8)||"—"}</b><small>{item?.commit_message||"No commit message recorded"}</small></div></section><section className="panel logs-panel"><div className="panel-heading"><div><span className="panel-eyebrow">BUILD OUTPUT</span><h2>Deployment logs</h2></div><Terminal size={16}/></div>{logs.length?<div className="log-console">{logs.map(log=><div className="log-line" key={log.id}><time>{new Date(log.created_at).toLocaleTimeString()}</time><span className={`log-level ${log.level.toLowerCase()}`}>{log.level}</span><span className="log-phase">{log.phase}</span><p>{log.message}</p></div>)}</div>:<div className="empty-inline">Log entries will appear here as the deployment runs.</div>}</section><section className="release-steps"><div><CheckCircle2 size={16}/><span>Repository checkout</span></div><div><Activity size={16}/><span>Build and runtime logs</span></div><div><CheckCircle2 size={16}/><span>Deployment status</span></div></section></AppShell>}
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Activity, ArrowLeft, ArrowUpRight, CheckCircle2, Globe, Terminal } from "lucide-react";
+import { AppShell } from "@/components/sidebar";
+import { api } from "@/lib/api";
+
+type Deployment = {
+  id: string;
+  service_id: string;
+  status: string;
+  created_at: string;
+  commit_sha?: string;
+  commit_message?: string;
+  image_tag?: string;
+  public_url?: string;
+};
+
+type Log = { id: string; phase: string; level: string; message: string; created_at: string };
+
+export default function DeploymentDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [item, setItem] = useState<Deployment | null>(null);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!localStorage.getItem("cloudx_token")) {
+      location.href = "/login";
+      return;
+    }
+    Promise.all([
+      api<Deployment>(`/deployments/${id}`),
+      api<Log[]>(`/deployments/${id}/logs`),
+    ])
+      .then(([deployment, deploymentLogs]) => {
+        setItem(deployment);
+        setLogs(deploymentLogs || []);
+      })
+      .catch((cause) => setError(cause.message));
+  }, [id]);
+
+  return (
+    <AppShell title="Deployment" description="Build output, release status, and commit metadata.">
+      <Link href="/deployments" className="back-link">
+        <ArrowLeft size={14} /> All deployments
+      </Link>
+      {error && <div className="inline-error">{error}</div>}
+      <section className="panel release-summary">
+        <div>
+          <span className="panel-eyebrow">RELEASE STATUS</span>
+          <h2><i className={`status-mark ${item?.status.toLowerCase() || ""}`} />{item?.status || "Loading…"}</h2>
+          <p>Started {item ? new Date(item.created_at).toLocaleString() : "—"}</p>
+        </div>
+        <div className="release-commit">
+          <span>COMMIT</span>
+          <b>{item?.commit_sha?.slice(0, 8) || "—"}</b>
+          <small>{item?.commit_message || "No commit message recorded"}</small>
+        </div>
+      </section>
+      {item?.public_url && (
+        <section className="panel detail-repo">
+          <div className="panel-heading">
+            <div>
+              <span className="panel-eyebrow">LIVE APPLICATION</span>
+              <h2>Public URL</h2>
+            </div>
+            <Globe size={16} />
+          </div>
+          <a href={item.public_url} target="_blank" rel="noreferrer">
+            {item.public_url}<ArrowUpRight size={13} />
+          </a>
+        </section>
+      )}
+      <section className="panel logs-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="panel-eyebrow">BUILD OUTPUT</span>
+            <h2>Deployment logs</h2>
+          </div>
+          <Terminal size={16} />
+        </div>
+        {logs.length ? (
+          <div className="log-console">
+            {logs.map((log) => (
+              <div className="log-line" key={log.id}>
+                <time>{new Date(log.created_at).toLocaleTimeString()}</time>
+                <span className={`log-level ${log.level.toLowerCase()}`}>{log.level}</span>
+                <span className="log-phase">{log.phase}</span>
+                <p>{log.message}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">Log entries will appear here as the deployment runs.</div>
+        )}
+      </section>
+      <section className="release-steps">
+        <div><CheckCircle2 size={16} /><span>Repository checkout</span></div>
+        <div><Activity size={16} /><span>Build and runtime logs</span></div>
+        <div><CheckCircle2 size={16} /><span>Deployment status</span></div>
+      </section>
+    </AppShell>
+  );
+}

@@ -9,6 +9,7 @@ type Deployment struct {
 	CommitSHA     string     `json:"commit_sha,omitempty"`
 	CommitMessage string     `json:"commit_message,omitempty"`
 	ImageTag      string     `json:"image_tag,omitempty"`
+	PublicURL     string     `json:"public_url,omitempty"`
 	Status        string     `json:"status"`
 	StartedAt     time.Time  `json:"started_at"`
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`

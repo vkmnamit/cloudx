@@ -154,10 +154,26 @@ Each deployment stores:
 * Commit SHA
 * Commit Message
 * Image Tag
+* Public URL when Traefik routing is enabled
 * Build Status
 * Logs
 * Start Time
 * Finish Time
+
+## Public application URLs
+
+The Azure Compose setup can publish each running service through Traefik and
+Let's Encrypt. Set `CLOUDX_APP_DOMAIN` to the base DNS domain and
+`CLOUDX_TRAEFIK_DYNAMIC_DIR` to a directory mounted by both the backend
+(writable) and Traefik (read-only). Point the base domain and its wildcard
+record at the server, and allow inbound TCP ports 80 and 443.
+
+Before deploying this version to an existing database, apply
+`backend/migrations/007_public_deployment_urls.sql`. Successful deployments
+receive a stable HTTPS URL based on the service name and a short unique service
+ID suffix. The route is switched to the new container after its health check;
+the application container remains on its deployment-specific network and is
+reachable through Traefik rather than a public host port.
 
 ---
 
@@ -567,5 +583,4 @@ This project is licensed under the MIT License.
 ## One suggestion
 
 Your README has outgrown a simple document. At CloudX's current stage, it would be worth adding:
-
 

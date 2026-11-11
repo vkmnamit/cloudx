@@ -1,0 +1,4 @@
+ALTER TYPE deployment_status ADD VALUE IF NOT EXISTS 'SUPERSEDED';
+
+ALTER TABLE deployments
+    ADD COLUMN IF NOT EXISTS public_url TEXT;

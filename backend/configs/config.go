@@ -19,6 +19,8 @@ type Config struct {
 	GitHubClientID           string
 	GitHubClientSecret       string
 	PublicAppURL             string
+	AppDomain                string
+	TraefikDynamicDir        string
 	EnvironmentEncryptionKey string
 }
 

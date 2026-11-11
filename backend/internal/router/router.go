@@ -18,6 +18,7 @@ import (
 	"github.com/vkmnamit/cloudx/internal/organization"
 	"github.com/vkmnamit/cloudx/internal/project"
 	"github.com/vkmnamit/cloudx/internal/projectenv"
+	"github.com/vkmnamit/cloudx/internal/proxy"
 	"github.com/vkmnamit/cloudx/internal/runtime"
 	projectservice "github.com/vkmnamit/cloudx/internal/service"
 )
@@ -119,8 +120,9 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	analyzerSvc := analyzer.NewAnalyzerService()
 	dockerSvc := docker.NewDockerService()
 	runtimeSvc := runtime.NewRuntimeService()
+	routeManager := proxy.NewTraefikService(configs.AppConfig.TraefikDynamicDir, configs.AppConfig.AppDomain)
 
-	deployService := deployment.NewService(deployRepo, serviceSvc, gitSvc, analyzerSvc, dockerSvc, runtimeSvc, logSvc, envSvc, githubHandler)
+	deployService := deployment.NewService(deployRepo, serviceSvc, gitSvc, analyzerSvc, dockerSvc, runtimeSvc, logSvc, envSvc, routeManager, githubHandler)
 	deployHandler := deployment.NewHandler(deployService, db)
 	deployment.RegisterRoutes(protected, deployHandler, jwtService)
 

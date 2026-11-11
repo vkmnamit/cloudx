@@ -42,6 +42,8 @@ func LoadEnv() {
 		GitHubClientID:           os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubClientSecret:       os.Getenv("GITHUB_CLIENT_SECRET"),
 		PublicAppURL:             os.Getenv("PUBLIC_APP_URL"),
+		AppDomain:                os.Getenv("CLOUDX_APP_DOMAIN"),
+		TraefikDynamicDir:        os.Getenv("CLOUDX_TRAEFIK_DYNAMIC_DIR"),
 		EnvironmentEncryptionKey: os.Getenv("ENVIRONMENT_ENCRYPTION_KEY"),
 	}
 

@@ -3,9 +3,12 @@ services:
     environment:
       DOCKER_HOST: tcp://docker-socket-proxy:2375
       CLOUDX_RUNTIME_NETWORK: cloudx-runtime
+      CLOUDX_APP_DOMAIN: 172.198.131.112.sslip.io
+      CLOUDX_TRAEFIK_DYNAMIC_DIR: /etc/cloudx/traefik/dynamic
       GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/cloudx-github-app.pem
     volumes:
       - /home/azureuser/cloudx-github-app.pem:/run/secrets/cloudx-github-app.pem:ro
+      - ./traefik/dynamic:/etc/cloudx/traefik/dynamic
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -35,7 +38,7 @@ services:
     command:
       - --log.level=INFO
       - --accesslog=true
-      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
@@ -51,7 +54,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./letsencrypt:/letsencrypt
     networks:
       - cloudx-internal
@@ -67,6 +70,7 @@ services:
       CONTAINERS: "1"
       IMAGES: "1"
       INFO: "1"
+      NETWORKS: "1"
       POST: "1"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
