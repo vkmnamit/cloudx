@@ -10,6 +10,14 @@ http:
         domains:
           - main: "172.198.131.112"
 
+    cloudx-dashboard:
+      rule: "Host(`cloudx.172.198.131.112.sslip.io`)"
+      entryPoints:
+        - websecure
+      service: cloudx-frontend
+      tls:
+        certResolver: le
+
   services:
     cloudx-frontend:
       loadBalancer:
