@@ -133,6 +133,24 @@ func (r *repository) ListAll(ctx context.Context) ([]*Project, error) {
 	return projects, nil
 }
 
+func (r *repository) ListByOwner(ctx context.Context, ownerID string) ([]*Project, error) {
+	query := `SELECT p.id::text,p.organization_id::text,p.name,p.slug,p.description,p.visibility::text,p.created_at,p.updated_at FROM projects p JOIN organizations o ON o.id=p.organization_id WHERE o.owner_id=$1 ORDER BY p.created_at DESC`
+	rows, err := r.db.Query(ctx, query, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	projects := make([]*Project, 0)
+	for rows.Next() {
+		p := &Project{}
+		if err := rows.Scan(&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description, &p.Visibility, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
 func (r *repository) Update(ctx context.Context, project *Project) error {
 	project.UpdatedAt = time.Now()
 	query := `

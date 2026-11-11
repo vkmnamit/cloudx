@@ -9,6 +9,7 @@ type Service interface {
 	Create(ctx context.Context, req CreateProjectRequest) (*Project, error)
 	GetByID(ctx context.Context, id string) (*Project, error)
 	List(ctx context.Context, orgID string) ([]*Project, error)
+	ListByOwner(ctx context.Context, ownerID string) ([]*Project, error)
 	Update(ctx context.Context, id string, req UpdateProjectRequest) (*Project, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -49,6 +50,16 @@ func (s *service) List(ctx context.Context, orgID string) ([]*Project, error) {
 		return s.repo.ListByOrganization(ctx, orgID)
 	}
 	return s.repo.ListAll(ctx)
+}
+
+func (s *service) ListByOwner(ctx context.Context, ownerID string) ([]*Project, error) {
+	ownerLister, ok := s.repo.(interface {
+		ListByOwner(context.Context, string) ([]*Project, error)
+	})
+	if !ok {
+		return nil, errors.New("owner-scoped project listing is unavailable")
+	}
+	return ownerLister.ListByOwner(ctx, ownerID)
 }
 
 func (s *service) Update(ctx context.Context, id string, req UpdateProjectRequest) (*Project, error) {

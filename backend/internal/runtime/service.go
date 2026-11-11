@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -15,7 +15,7 @@ import (
 
 // RuntimeService manages running containers.
 type RuntimeService interface {
-	RunContainer(imageName string, envArgs []string, logWriter io.Writer) (containerID string, hostPort int, err error)
+	RunContainer(imageName string, envArgs []string, logWriter io.Writer, containerPort int) (containerID string, hostPort int, err error)
 	StopContainer(containerID string) error
 	DeleteContainer(containerID string) error
 	InspectContainer(containerID string) (string, error)
@@ -28,8 +28,12 @@ func NewRuntimeService() RuntimeService {
 	return &runtimeService{}
 }
 
-func (s *runtimeService) RunContainer(imageName string, envArgs []string, logWriter io.Writer) (string, int, error) {
-	args := []string{"run", "-d", "-P"}
+func (s *runtimeService) RunContainer(imageName string, envArgs []string, logWriter io.Writer, containerPort int) (string, int, error) {
+	network := os.Getenv("CLOUDX_RUNTIME_NETWORK")
+	if network == "" {
+		network = "bridge"
+	}
+	args := []string{"run", "-d", "--network", network, "-p", fmt.Sprintf("0:%d", containerPort)}
 	args = append(args, envArgs...)
 	args = append(args, imageName)
 
@@ -65,22 +69,23 @@ func (s *runtimeService) getHostPort(containerID string) (int, error) {
 		return 0, err
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || lines[0] == "" {
-		return 0, fmt.Errorf("no port mappings found")
+	var mappings map[string][]struct {
+		HostPort string `json:"HostPort"`
 	}
-
-	parts := strings.Split(lines[0], ":")
-	if len(parts) < 2 {
-		return 0, fmt.Errorf("unexpected port mapping format: %s", lines[0])
+	if err := json.Unmarshal(out, &mappings); err != nil {
+		return 0, fmt.Errorf("parse Docker port mappings: %w", err)
 	}
-
-	port, err := strconv.Atoi(strings.TrimSpace(parts[len(parts)-1]))
-	if err != nil {
-		return 0, fmt.Errorf("could not parse port: %w", err)
+	for _, bindings := range mappings {
+		if len(bindings) == 0 {
+			continue
+		}
+		port, err := strconv.Atoi(bindings[0].HostPort)
+		if err != nil {
+			return 0, fmt.Errorf("could not parse host port: %w", err)
+		}
+		return port, nil
 	}
-
-	return port, nil
+	return 0, fmt.Errorf("no port mappings found")
 }
 
 func (s *runtimeService) StopContainer(containerID string) error {
@@ -113,12 +118,7 @@ func (s *runtimeService) WaitUntilHealthy(ctx context.Context, containerID strin
 	defer ticker.Stop()
 
 	targets := []string{}
-	if gw := os.Getenv("DOCKER_HOST_GATEWAY"); gw != "" {
-		targets = append(targets, fmt.Sprintf("%s:%d", gw, hostPort))
-	} else {
-		targets = append(targets, fmt.Sprintf("host.docker.internal:%d", hostPort))
-		targets = append(targets, fmt.Sprintf("localhost:%d", hostPort))
-	}
+	targets = append(targets, fmt.Sprintf("127.0.0.1:%d", hostPort))
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,14 +135,8 @@ func (s *runtimeService) WaitUntilHealthy(ctx context.Context, containerID strin
 				conn, err := net.DialTimeout("tcp", target, 500*time.Millisecond)
 				if err == nil {
 					conn.Close()
-					
+
 					// Optional: Try HTTP GET / to see if it responds, but we don't strictly require 200 OK.
-					client := http.Client{Timeout: 2 * time.Second}
-					resp, err := client.Get(fmt.Sprintf("http://%s/", target))
-					if err == nil {
-						resp.Body.Close()
-					}
-					// Regardless of HTTP response (even 404 or 500), the process is up and listening.
 					return nil
 				}
 			}

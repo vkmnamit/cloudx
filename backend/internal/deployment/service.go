@@ -3,8 +3,6 @@ package deployment
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"path/filepath"
 	"time"
 
@@ -27,15 +25,20 @@ type Service interface {
 	DeleteDeployment(ctx context.Context, id string) error
 }
 
+type GitHubTokenProvider interface {
+	TokenForRepository(ctx context.Context, userID, repositoryURL string) (string, error)
+}
+
 type service struct {
-	repo     Repository
-	service  projectservice.Service
-	git      git.GitService
-	analyzer analyzer.AnalyzerService
-	docker   docker.DockerService
-	runtime  runtime.RuntimeService
-	logSvc   logs.LogService
-	envSvc   environment.EnvironmentService
+	repo         Repository
+	service      projectservice.Service
+	git          git.GitService
+	analyzer     analyzer.AnalyzerService
+	docker       docker.DockerService
+	runtime      runtime.RuntimeService
+	logSvc       logs.LogService
+	envSvc       environment.EnvironmentService
+	githubTokens GitHubTokenProvider
 }
 
 func NewService(
@@ -47,8 +50,9 @@ func NewService(
 	r runtime.RuntimeService,
 	l logs.LogService,
 	e environment.EnvironmentService,
+	tokenProviders ...GitHubTokenProvider,
 ) Service {
-	return &service{
+	result := &service{
 		repo:     repo,
 		service:  serviceSvc,
 		git:      g,
@@ -58,6 +62,10 @@ func NewService(
 		logSvc:   l,
 		envSvc:   e,
 	}
+	if len(tokenProviders) > 0 {
+		result.githubTokens = tokenProviders[0]
+	}
+	return result
 }
 
 func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) (*Deployment, error) {
@@ -109,7 +117,16 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	}
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseClone, logs.LevelInfo, fmt.Sprintf("Cloning repository: %s (%s)", serviceRecord.RepositoryURL, branch))
 
-	projectPath, err := s.git.Clone(serviceRecord.RepositoryURL, branch, dep.ID)
+	githubToken := ""
+	if s.githubTokens != nil {
+		githubToken, err = s.githubTokens.TokenForRepository(ctx, userID, serviceRecord.RepositoryURL)
+		if err != nil {
+			_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseClone, logs.LevelError, "GitHub authorization failed: "+err.Error())
+			_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
+			return dep, fmt.Errorf("GitHub authorization failed: %w", err)
+		}
+	}
+	projectPath, err := s.git.CloneWithToken(serviceRecord.RepositoryURL, branch, dep.ID, githubToken)
 	if err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseClone, logs.LevelError, "Clone failed: "+err.Error())
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
@@ -146,7 +163,7 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	if analysis.ProjectRoot != "" && analysis.ProjectRoot != buildContext {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelInfo, "Found project in sub-directory: "+filepath.Base(analysis.ProjectRoot))
 		buildContext = analysis.ProjectRoot
-		
+
 		// If the original dockerfile path was a relative default, update it to the new root
 		if serviceRecord.DockerfilePath == "" || serviceRecord.DockerfilePath == "./Dockerfile" || serviceRecord.DockerfilePath == "Dockerfile" {
 			dockerfilePath = filepath.Join(buildContext, "Dockerfile")
@@ -163,23 +180,12 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	if analysis.ExposedPort > 0 {
 		port = analysis.ExposedPort
 	}
-	
+
 	if err := s.docker.GenerateDockerfile(analysis, dockerfilePath, port); err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelError, "Dockerfile generation failed: "+err.Error())
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
 		return dep, fmt.Errorf("dockerfile generation failed: %w", err)
 	}
-
-	fmt.Println("========== GENERATED DOCKERFILE ==========")
-
-	content, err := os.ReadFile(dockerfilePath)
-	if err != nil {
-		fmt.Println("Failed to read Dockerfile:", err)
-	} else {
-		fmt.Println(string(content))
-	}
-
-	fmt.Println("==========================================")
 
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseBuild, logs.LevelInfo, "Dockerfile ready")
 
@@ -208,14 +214,7 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Starting container...")
 	runtimeWriter := s.logSvc.NewWriter(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo)
 
-	fmt.Println("========== DEPLOY DEBUG ==========")
-	fmt.Println("Dockerfile:", dockerfilePath)
-	fmt.Println("Build Context:", buildContext)
-	fmt.Println("Image Tag:", imageTag)
-	fmt.Printf("Env Args: %#v\n", envArgs)
-	fmt.Println("==================================")
-
-	containerID, hostPort, err := s.runtime.RunContainer(imageTag, envArgs, runtimeWriter)
+	containerID, hostPort, err := s.runtime.RunContainer(imageTag, envArgs, runtimeWriter, port)
 	if err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Container run failed: "+err.Error())
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
@@ -224,14 +223,14 @@ func (s *service) Deploy(ctx context.Context, userID string, req DeployRequest) 
 
 	// ── Step 8: Wait for Health ──────────────────────────────────────
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Waiting for container to become healthy...")
-	
+
 	if err := s.runtime.WaitUntilHealthy(ctx, containerID, hostPort, 30*time.Second); err != nil {
 		_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelError, "Health check failed: "+err.Error())
 		_ = s.runtime.StopContainer(containerID)
 		_ = s.repo.UpdateStatus(ctx, dep.ID, StatusFailed)
 		return dep, fmt.Errorf("health check failed: %w", err)
 	}
-	
+
 	_ = s.logSvc.Append(ctx, dep.ID, logs.PhaseRuntime, logs.LevelInfo, "Health check passed")
 
 	dep.ImageTag = imageTag

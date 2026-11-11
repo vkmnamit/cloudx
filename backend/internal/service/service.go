@@ -10,6 +10,7 @@ type Service interface {
 	GetByID(ctx context.Context, id string) (*ServiceRecord, error)
 	Create(ctx context.Context, req CreateServiceRequest) (*ServiceRecord, error)
 	List(ctx context.Context, envID string) ([]*ServiceRecord, error)
+	ListByOwner(ctx context.Context, ownerID string) ([]*ServiceRecord, error)
 	Update(ctx context.Context, id string, req UpdateServiceRequest) (*ServiceRecord, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -89,6 +90,16 @@ func (s *service) List(ctx context.Context, envID string) ([]*ServiceRecord, err
 		return s.repo.ListByEnvironment(ctx, envID)
 	}
 	return s.repo.ListAll(ctx)
+}
+
+func (s *service) ListByOwner(ctx context.Context, ownerID string) ([]*ServiceRecord, error) {
+	ownerLister, ok := s.repo.(interface {
+		ListByOwner(context.Context, string) ([]*ServiceRecord, error)
+	})
+	if !ok {
+		return nil, errors.New("owner-scoped service listing is unavailable")
+	}
+	return ownerLister.ListByOwner(ctx, ownerID)
 }
 
 func (s *service) Update(ctx context.Context, id string, req UpdateServiceRequest) (*ServiceRecord, error) {

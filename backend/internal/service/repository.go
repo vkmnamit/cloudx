@@ -173,6 +173,24 @@ func (r *repository) ListAll(ctx context.Context) ([]*ServiceRecord, error) {
 	return records, nil
 }
 
+func (r *repository) ListByOwner(ctx context.Context, ownerID string) ([]*ServiceRecord, error) {
+	query := `SELECT s.id::text,s.environment_id::text,s.name,s.runtime,COALESCE(s.repository_url,''),COALESCE(s.branch,'main'),COALESCE(s.dockerfile_path,'./Dockerfile'),COALESCE(s.build_context,'.'),COALESCE(s.port,0),COALESCE(s.health_check,''),COALESCE(s.cpu_limit,''),COALESCE(s.memory_limit,''),COALESCE(s.replicas,1),COALESCE(s.auto_deploy,TRUE),s.created_at,s.updated_at FROM services s JOIN environments e ON e.id=s.environment_id JOIN projects p ON p.id=e.project_id JOIN organizations o ON o.id=p.organization_id WHERE o.owner_id=$1 ORDER BY s.created_at DESC`
+	rows, err := r.db.Query(ctx, query, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]*ServiceRecord, 0)
+	for rows.Next() {
+		s := &ServiceRecord{}
+		if err := rows.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Runtime, &s.RepositoryURL, &s.Branch, &s.DockerfilePath, &s.BuildContext, &s.Port, &s.HealthCheck, &s.CPULimit, &s.MemoryLimit, &s.Replicas, &s.AutoDeploy, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, s)
+	}
+	return records, rows.Err()
+}
+
 func (r *repository) Update(ctx context.Context, s *ServiceRecord) error {
 	s.UpdatedAt = time.Now()
 	query := `

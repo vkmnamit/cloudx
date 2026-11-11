@@ -120,6 +120,24 @@ func (r *repository) ListAll(ctx context.Context) ([]*Environment, error) {
 	return envs, nil
 }
 
+func (r *repository) ListByOwner(ctx context.Context, ownerID string) ([]*Environment, error) {
+	query := `SELECT e.id::text,e.project_id::text,e.name,e.created_at,e.updated_at FROM environments e JOIN projects p ON p.id=e.project_id JOIN organizations o ON o.id=p.organization_id WHERE o.owner_id=$1 ORDER BY e.created_at DESC`
+	rows, err := r.db.Query(ctx, query, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	envs := make([]*Environment, 0)
+	for rows.Next() {
+		env := &Environment{}
+		if err := rows.Scan(&env.ID, &env.ProjectID, &env.Name, &env.CreatedAt, &env.UpdatedAt); err != nil {
+			return nil, err
+		}
+		envs = append(envs, env)
+	}
+	return envs, rows.Err()
+}
+
 func (r *repository) Update(ctx context.Context, env *Environment) error {
 	env.UpdatedAt = time.Now()
 	query := `

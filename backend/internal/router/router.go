@@ -13,6 +13,7 @@ import (
 	"github.com/vkmnamit/cloudx/internal/docker"
 	"github.com/vkmnamit/cloudx/internal/environment"
 	"github.com/vkmnamit/cloudx/internal/git"
+	"github.com/vkmnamit/cloudx/internal/githubapp"
 	"github.com/vkmnamit/cloudx/internal/logs"
 	"github.com/vkmnamit/cloudx/internal/organization"
 	"github.com/vkmnamit/cloudx/internal/project"
@@ -31,6 +32,8 @@ func Setup(db *pgx.Conn) *gin.Engine {
 
 	// ─── Public Routes ────────────────────────────────────────────
 	auth.RegisterRoutes(api, db, jwtService)
+	githubHandler := githubapp.NewHandler(db, configs.AppConfig)
+	api.GET("/github/callback", githubHandler.Callback)
 
 	// ─── Protected Routes ─────────────────────────────────────────
 	protected := api.Group("/")
@@ -41,11 +44,14 @@ func Setup(db *pgx.Conn) *gin.Engine {
 		email, _ := c.Get("email")
 		c.JSON(http.StatusOK, gin.H{"user_id": userID, "email": email})
 	})
+	protected.GET("/github/connect", githubHandler.Connect)
+	protected.GET("/github/installations", githubHandler.Installations)
+	protected.GET("/github/repositories", githubHandler.Repositories)
 
 	// ─── Organizations ────────────────────────────────────────────
 	orgRepo := organization.NewRepository(db)
 	orgSvc := organization.NewService(orgRepo)
-	orgHandler := organization.NewHandler(orgSvc)
+	orgHandler := organization.NewHandler(orgSvc, db)
 
 	protected.POST("/organizations", orgHandler.Create)
 	protected.GET("/organizations", orgHandler.List)
@@ -56,7 +62,7 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	// ─── Projects ─────────────────────────────────────────────────
 	projRepo := project.NewRepository(db)
 	projSvc := project.NewService(projRepo)
-	projHandler := project.NewHandler(projSvc)
+	projHandler := project.NewHandler(projSvc, db)
 
 	protected.POST("/projects", projHandler.Create)
 	protected.GET("/projects", projHandler.List)
@@ -67,7 +73,7 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	// ─── Environments ──────────────────────────────────────────────
 	envProjRepo := projectenv.NewRepository(db)
 	envProjSvc := projectenv.NewService(envProjRepo)
-	envProjHandler := projectenv.NewHandler(envProjSvc)
+	envProjHandler := projectenv.NewHandler(envProjSvc, db)
 
 	protected.POST("/environments", envProjHandler.Create)
 	protected.GET("/environments", envProjHandler.List)
@@ -78,7 +84,7 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	// ─── Services ─────────────────────────────────────────────────
 	serviceRepo := projectservice.NewRepository(db)
 	serviceSvc := projectservice.NewService(serviceRepo)
-	serviceHandler := projectservice.NewHandler(serviceSvc)
+	serviceHandler := projectservice.NewHandler(serviceSvc, db)
 
 	protected.POST("/services", serviceHandler.Create)
 	protected.GET("/services", serviceHandler.List)
@@ -89,18 +95,23 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	// ─── Logs ─────────────────────────────────────────────────────
 	logRepo := logs.NewRepository(db)
 	logSvc := logs.NewLogService(logRepo)
-	logHandler := logs.NewHandler(logSvc)
+	logHandler := logs.NewHandler(logSvc, db)
 	// GET /api/deployments/:id/logs
 	protected.GET("/deployments/:id/logs", logHandler.GetLogs)
 
 	// ─── Deployment Environment Variables ─────────────────────────
 	envRepo := environment.NewRepository(db)
-	envSvc := environment.NewEnvironmentService(envRepo)
-	envHandler := environment.NewHandler(envSvc)
+	// Keep JWT_SECRET as a decryption fallback for environment values saved
+	// before ENVIRONMENT_ENCRYPTION_KEY was configured.
+	envSvc := environment.NewEnvironmentService(envRepo, configs.AppConfig.EnvironmentEncryptionKey, configs.AppConfig.JWTSecret)
+	envHandler := environment.NewHandler(envSvc, db)
 	// POST /api/deployments/:id/env
 	protected.POST("/deployments/:id/env", envHandler.SetVars)
 	// GET  /api/deployments/:id/env
 	protected.GET("/deployments/:id/env", envHandler.GetVars)
+	protected.GET("/services/:id/env", envHandler.GetServiceVars)
+	protected.PUT("/services/:id/env", envHandler.SetServiceVars)
+	protected.DELETE("/services/:id/env/:varId", envHandler.DeleteServiceVar)
 
 	// ─── Deployment (orchestrator) ────────────────────────────────
 	deployRepo := deployment.NewRepository(db)
@@ -109,8 +120,8 @@ func Setup(db *pgx.Conn) *gin.Engine {
 	dockerSvc := docker.NewDockerService()
 	runtimeSvc := runtime.NewRuntimeService()
 
-	deployService := deployment.NewService(deployRepo, serviceSvc, gitSvc, analyzerSvc, dockerSvc, runtimeSvc, logSvc, envSvc)
-	deployHandler := deployment.NewHandler(deployService)
+	deployService := deployment.NewService(deployRepo, serviceSvc, gitSvc, analyzerSvc, dockerSvc, runtimeSvc, logSvc, envSvc, githubHandler)
+	deployHandler := deployment.NewHandler(deployService, db)
 	deployment.RegisterRoutes(protected, deployHandler, jwtService)
 
 	return r

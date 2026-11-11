@@ -4,14 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 type Handler struct {
 	service Service
+	db      *pgx.Conn
 }
 
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service Service, db *pgx.Conn) *Handler {
+	return &Handler{service: service, db: db}
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -66,6 +68,10 @@ func (h *Handler) List(c *gin.Context) {
 
 func (h *Handler) GetByID(c *gin.Context) {
 	id := c.Param("id")
+	if !h.ownsOrganization(c, id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		return
+	}
 	org, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
@@ -77,6 +83,10 @@ func (h *Handler) GetByID(c *gin.Context) {
 
 func (h *Handler) Update(c *gin.Context) {
 	id := c.Param("id")
+	if !h.ownsOrganization(c, id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		return
+	}
 	var req UpdateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -94,10 +104,24 @@ func (h *Handler) Update(c *gin.Context) {
 
 func (h *Handler) Delete(c *gin.Context) {
 	id := c.Param("id")
+	if !h.ownsOrganization(c, id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		return
+	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "organization deleted successfully"})
+}
+
+func (h *Handler) ownsOrganization(c *gin.Context, id string) bool {
+	userID, ok := c.Get("user_id")
+	if !ok {
+		return false
+	}
+	var owned bool
+	err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1 AND owner_id=$2)`, id, userID).Scan(&owned)
+	return err == nil && owned
 }

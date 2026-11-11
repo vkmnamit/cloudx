@@ -1,0 +1,17 @@
+http:
+  routers:
+    cloudx-frontend:
+      rule: "Host(`172.198.131.112`)"
+      entryPoints:
+        - websecure
+      service: cloudx-frontend
+      tls:
+        certResolver: le
+        domains:
+          - main: "172.198.131.112"
+
+  services:
+    cloudx-frontend:
+      loadBalancer:
+        servers:
+          - url: http://frontend:3000

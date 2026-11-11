@@ -14,6 +14,7 @@ type GitService interface {
 	// Clone clones a remote repository into a local directory.
 	// Returns the absolute path to the cloned project.
 	Clone(repoURL string, branch string, destDir string) (string, error)
+	CloneWithToken(repoURL string, branch string, destDir, token string) (string, error)
 
 	// CommitMetadata returns the current commit SHA and message from a local checkout.
 	CommitMetadata(projectPath string) (sha string, message string, err error)
@@ -35,6 +36,10 @@ func NewGitService(baseDir string) GitService {
 // Clone performs a shallow `git clone` of repoURL into baseDir/<slug>.
 // If the directory already exists, it pulls instead of cloning.
 func (s *gitService) Clone(repoURL string, branch string, destDir string) (string, error) {
+	return s.CloneWithToken(repoURL, branch, destDir, "")
+}
+
+func (s *gitService) CloneWithToken(repoURL string, branch string, destDir, token string) (string, error) {
 	if err := os.MkdirAll(s.baseDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create base dir: %w", err)
 	}
@@ -58,6 +63,29 @@ func (s *gitService) Clone(repoURL string, branch string, destDir string) (strin
 	}
 	args = append(args, repoURL, target)
 	cmd := exec.Command("git", args...)
+	if token != "" {
+		askpassFile, err := os.CreateTemp(s.baseDir, ".cloudx-git-askpass-*")
+		if err != nil {
+			return "", fmt.Errorf("prepare temporary git credentials: %w", err)
+		}
+		askpass := askpassFile.Name()
+		if _, err := askpassFile.Write([]byte("#!/bin/sh\ncase \"$1\" in *Username*) echo x-access-token;; *Password*) printf '%s' \"$CLOUDX_GIT_TOKEN\";; esac\n")); err != nil {
+			askpassFile.Close()
+			os.Remove(askpass)
+			return "", fmt.Errorf("write temporary git credentials: %w", err)
+		}
+		if err := askpassFile.Chmod(0o700); err != nil {
+			askpassFile.Close()
+			os.Remove(askpass)
+			return "", fmt.Errorf("protect temporary git credentials: %w", err)
+		}
+		if err := askpassFile.Close(); err != nil {
+			os.Remove(askpass)
+			return "", fmt.Errorf("close temporary git credentials: %w", err)
+		}
+		defer os.Remove(askpass)
+		cmd.Env = append(os.Environ(), "GIT_ASKPASS="+askpass, "GIT_TERMINAL_PROMPT=0", "CLOUDX_GIT_TOKEN="+token)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

@@ -12,7 +12,14 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 
-	JWTSecret string
+	JWTSecret                string
+	GitHubAppSlug            string
+	GitHubAppID              string
+	GitHubAppPrivateKey      string
+	GitHubClientID           string
+	GitHubClientSecret       string
+	PublicAppURL             string
+	EnvironmentEncryptionKey string
 }
 
 var AppConfig Config
