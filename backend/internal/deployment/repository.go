@@ -146,13 +146,13 @@ func (r *repository) UpdateStatus(ctx context.Context, id string, status string)
 		UPDATE deployments
 		SET status = $1,
 			finished_at = CASE
-				WHEN $1::text IN ('RUNNING', 'FAILED', 'CANCELLED', 'SUPERSEDED') THEN COALESCE(finished_at, NOW())
+			WHEN $2::text IN ('RUNNING', 'FAILED', 'CANCELLED', 'SUPERSEDED') THEN COALESCE(finished_at, NOW())
 				ELSE finished_at
 			END,
 			updated_at = NOW()
-		WHERE id = $2
+		WHERE id = $3
 	`
-	_, err := r.db.Exec(ctx, query, status, id)
+	_, err := r.db.Exec(ctx, query, status, status, id)
 	return err
 }
 
