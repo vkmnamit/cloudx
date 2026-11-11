@@ -96,7 +96,7 @@ func routeConfiguration(routerName, host, containerName string, containerPort in
 	return fmt.Sprintf(`http:
   routers:
     %s:
-      rule: "Host(%q)"
+      rule: 'Host(%q)'
       entryPoints:
         - websecure
       service: %s

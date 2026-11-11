@@ -146,7 +146,7 @@ func (r *repository) UpdateStatus(ctx context.Context, id string, status string)
 		UPDATE deployments
 		SET status = $1,
 			finished_at = CASE
-				WHEN $1 IN ('RUNNING', 'FAILED', 'CANCELLED', 'SUPERSEDED') THEN COALESCE(finished_at, NOW())
+				WHEN $1::text IN ('RUNNING', 'FAILED', 'CANCELLED', 'SUPERSEDED') THEN COALESCE(finished_at, NOW())
 				ELSE finished_at
 			END,
 			updated_at = NOW()

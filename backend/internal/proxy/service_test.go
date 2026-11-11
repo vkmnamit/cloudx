@@ -38,7 +38,7 @@ func TestValidateDomainRejectsInvalidLabels(t *testing.T) {
 func TestRouteConfigurationTargetsContainerNetworkAddress(t *testing.T) {
 	config := routeConfiguration("cloudx-1234", "app.example.net", "cloudx-deployment-5678", 3000)
 	for _, expected := range []string{
-		`Host("app.example.net")`,
+		`rule: 'Host("app.example.net")'`,
 		"certResolver: le",
 		"http://cloudx-deployment-5678:3000",
 	} {
